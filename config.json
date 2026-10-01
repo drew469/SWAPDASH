@@ -1,0 +1,51 @@
+{
+  "dashboard_title": "IG Weight Loss research board",
+  "client_name": "Drew",
+  "own_handles": [
+    "ig_weightloss"
+  ],
+  "groups": {
+    "Weight Loss / Fitness": [
+      "lossweght",
+      "elevatemindhq",
+      "health2natural",
+      "gaingoat"
+    ],
+    "Longevity / Anti-Aging": [
+      "antiagingmission",
+      "createpurehealth",
+      "wellnessuncensored",
+      "stepstolongevity"
+    ],
+    "Nutrition / Recipes": [
+      "nourishing",
+      "eatinghealthytoday",
+      "healthymealtoday",
+      "calories.hub"
+    ]
+  },
+  "apify": {
+    "actor": "apify~instagram-post-scraper",
+    "daily_lookback_days": 8,
+    "daily_max_posts_per_page": 40,
+    "bootstrap_lookback_days": 365,
+    "bootstrap_max_posts_per_page": 400,
+    "data_detail_level": "detailedData",
+    "max_charge_usd_per_run": 20
+  },
+  "scoring": {
+    "baseline_days": 30,
+    "settled_after_hours": 72,
+    "min_baseline_posts": 3,
+    "include_single_images": true,
+    "archive_days": 365,
+    "baseline_window_days": 45,
+    "thumb_all_days": 30,
+    "archive_thumb_min_score": 1.0
+  },
+  "group_notes": {
+    "Weight Loss / Fitness": "GLP-1 Starter Kit",
+    "Longevity / Anti-Aging": "No product yet",
+    "Nutrition / Recipes": "Recipe Mini Guide / recipe library"
+  }
+}

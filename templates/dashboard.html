@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outlier board</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏆</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #EEF1F4;
+    --surface: #FFFFFF;
+    --ink: #141821;
+    --muted: #5A6372;
+    --rule: #D8DEE6;
+    --accent: #8F5D00;
+    --accent-soft: #FFE9B3;
+    --hot: #FFD36B;
+    --focus: #1F5FD6;
+    --cond: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", sans-serif;
+    --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101318; --surface: #181C23; --ink: #ECEFF3; --muted: #939CAB;
+      --rule: #29303A; --accent: #F5B83D; --accent-soft: #3A2E12; --hot: #6B4F10; --focus: #7FA8FF;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101318; --surface: #181C23; --ink: #ECEFF3; --muted: #939CAB;
+    --rule: #29303A; --accent: #F5B83D; --accent-soft: #3A2E12; --hot: #6B4F10; --focus: #7FA8FF;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 400 15px/1.45 var(--body);
+    font-variant-numeric: tabular-nums;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+  button, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  img { max-width: 100%; display: block; }
+
+  /* header */
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-bottom: 16px; }
+  h1 { font: 700 30px/1.05 var(--cond); margin: 0; letter-spacing: .2px; }
+  .updated { color: var(--muted); font-size: 13px; }
+  .sample-note { background: var(--accent-soft); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 14px; }
+
+  /* controls */
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 18px; }
+  .seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; cursor: pointer; font-weight: 500; white-space: nowrap; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+  .seg.kind button { font: 600 17px/1.2 var(--cond); padding: 6px 16px; }
+  .seg .count { opacity: .6; font-weight: 500; margin-left: 4px; }
+  .sort { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; margin-left: auto; }
+  .sort select { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 8px; color: var(--ink); }
+  #win button[data-v="m3_6"] { margin-left: 6px; position: relative; }
+  #win button[data-v="m3_6"]::before { content: ""; position: absolute; left: -4px; top: 6px; bottom: 6px; border-left: 1px solid var(--rule); }
+  #win { flex-wrap: wrap; }
+  .pillar-note { margin: -8px 0 16px; font-size: 14px; color: var(--muted); }
+  .pillar-note b { color: var(--ink); }
+  .vault-note { background: var(--accent-soft); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin: -6px 0 16px; }
+
+  /* hero: the one loud thing */
+  .hero {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center;
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 14px;
+    padding: 16px 20px; margin-bottom: 18px; text-decoration: none; color: inherit;
+  }
+  .hero:hover { border-color: var(--muted); }
+  .hero .mult { font: 700 76px/.9 var(--cond); color: var(--accent); letter-spacing: -1px; }
+  .hero .mult small { font-size: 40px; }
+  .hero .what { font: 600 20px/1.2 var(--cond); margin: 0 0 4px; }
+  .hero .why { color: var(--muted); margin: 0 0 8px; }
+  .hero .cap { margin: 0; max-width: 60ch; }
+  .hero .thumb { width: 84px; }
+
+  /* leaderboard */
+  .board { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; }
+  .row { border-top: 1px solid var(--rule); }
+  .row:first-child { border-top: 0; }
+  .row a { display: grid; grid-template-columns: 34px auto 1fr auto; gap: 14px; align-items: center; padding: 12px 18px 12px 12px; text-decoration: none; color: inherit; }
+  .row a:hover { background: color-mix(in srgb, var(--bg) 55%, transparent); }
+  .rank { font: 600 20px/1 var(--cond); color: var(--muted); text-align: center; }
+  .thumb { width: 54px; border-radius: 6px; overflow: hidden; background: var(--rule); position: relative; }
+  .thumb.reel { aspect-ratio: 9 / 16; }
+  .thumb.carousel { aspect-ratio: 4 / 5; width: 64px; }
+  .thumb.image { aspect-ratio: 4 / 5; width: 64px; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .thumb .ph { position: absolute; inset: 0; display: grid; place-items: center; font: 700 18px var(--cond); color: var(--muted); }
+  .thumb .slides { position: absolute; right: 3px; top: 3px; background: rgba(0,0,0,.65); color: #fff; font-size: 10px; font-weight: 600; padding: 0 4px; border-radius: 4px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; font-size: 13px; color: var(--muted); }
+  .handle { font-weight: 600; color: var(--ink); font-size: 15px; }
+  .tag { font-size: 11px; font-weight: 600; background: var(--accent-soft); color: var(--ink); padding: 1px 6px; border-radius: 4px; }
+  .cap { margin: 3px 0 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .stats { display: flex; flex-wrap: wrap; gap: 2px 16px; font-size: 13px; color: var(--muted); }
+  .stats b { color: var(--ink); font-weight: 600; font-size: 14px; }
+  .score { text-align: right; min-width: 84px; }
+  .score .x { font: 700 32px/1 var(--cond); }
+  .score.hot .x { color: var(--accent); }
+  .score .vs { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .score .na { font-size: 12px; color: var(--muted); max-width: 90px; display: inline-block; }
+
+  .more { display: block; width: 100%; border: 0; border-top: 1px solid var(--rule); background: transparent; padding: 12px; cursor: pointer; font-weight: 600; }
+  .empty { padding: 36px 20px; text-align: center; color: var(--muted); }
+  .empty button { margin-top: 10px; border: 1px solid var(--rule); background: var(--bg); padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+
+  footer { margin-top: 18px; color: var(--muted); font-size: 13px; max-width: 75ch; }
+  footer p { margin: 0 0 6px; }
+
+  @media (max-width: 600px) {
+    .sort { margin-left: 0; }
+    .hero { grid-template-columns: auto 1fr; }
+    .hero .thumb { display: none; }
+    .hero .mult { font-size: 58px; }
+    .row a { grid-template-columns: auto 1fr; gap: 10px 12px; }
+    .rank { display: none; }
+    .score { grid-column: 2; text-align: left; display: flex; gap: 8px; align-items: baseline; }
+    .score .x { font-size: 24px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero .mult { animation: tick .5s ease-out both; }
+    @keyframes tick { from { opacity: 0; transform: translateY(6px); } }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title"></h1>
+    <span class="updated" id="updated"></span>
+  </header>
+  <div id="sample"></div>
+
+  <div class="controls" role="toolbar" aria-label="Filters">
+    <div class="seg kind" id="kind"></div>
+    <div class="seg" id="win"></div>
+    <div class="seg" id="group"></div>
+    <label class="sort">Rank by
+      <select id="sort"></select>
+    </label>
+  </div>
+
+  <div id="pnote"></div>
+  <div id="hero"></div>
+  <ol class="board" id="board" aria-live="polite"></ol>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const state = { kind: "reel", win: "h72", group: "All", sort: "score", limit: 25 };
+// [key, button label, from hours ago, to hours ago, phrase used in sentences]
+const RECENT = [["h24", "24 hours", 0, 24, "in the last 24 hours"], ["h72", "72 hours", 0, 72, "in the last 72 hours"],
+  ["d7", "7 days", 0, 168, "in the last 7 days"], ["d30", "30 days", 0, 720, "in the last 30 days"],
+  ["d90", "90 days", 0, 2160, "in the last 90 days"]];
+const VAULT = [["m3_6", "3–6 months ago", 2160, 4380, "from 3–6 months ago"],
+  ["m6_12", "6–12 months ago", 4380, 8800, "from 6–12 months ago"],
+  ["m3p", "All 3+ months", 2160, 8800, "from 3+ months ago"]];
+const WINDOWS = () => [...RECENT, ...VAULT];
+const isVault = () => VAULT.some(([k]) => k === state.win);
+const curWin = () => WINDOWS().find(([k]) => k === state.win) || WINDOWS()[0];
+const now = new Date(DATA.generated);
+const $ = (id) => document.getElementById(id);
+
+const fmt = (n) => n == null ? "–" : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M"
+  : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + "K" : String(n);
+const ageOf = (iso) => {
+  const h = (now - new Date(iso)) / 36e5;
+  if (h >= 24 * 60) return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  return h < 1 ? "just now" : h < 24 ? Math.round(h) + "h ago" : Math.round(h / 24) + "d ago";
+};
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function inWindow(p) {
+  const [, , from, to] = curWin();
+  const h = (now - new Date(p.posted)) / 36e5;
+  return h >= from && h <= to;
+}
+function matches(p, kind = state.kind) {
+  return p.kind === kind && inWindow(p) && (state.group === "All" || p.group === state.group);
+}
+
+function sortOptions() {
+  const main = state.kind === "reel" ? ["views", "Most views"] : ["likes", "Most likes"];
+  return [["score", "Beat their normal"], main, ...(state.kind === "reel" ? [["likes", "Most likes"]] : []),
+    ["comments", "Most comments"], ["posted", "Newest"]];
+}
+
+function sorted(list) {
+  const key = state.sort;
+  return [...list].sort((a, b) => {
+    if (key === "posted") return new Date(b.posted) - new Date(a.posted);
+    const av = a[key] ?? -1, bv = b[key] ?? -1;
+    return bv - av;
+  });
+}
+
+function seg(el, items, current, onPick, labelFn) {
+  el.innerHTML = items.map(([val, label]) =>
+    `<button type="button" aria-pressed="${String(val) === String(current)}" data-v="${esc(val)}">${labelFn ? labelFn(val, label) : esc(label)}</button>`
+  ).join("");
+  el.querySelectorAll("button").forEach((b) => b.onclick = () => onPick(b.dataset.v));
+}
+
+function thumb(p, cls = "") {
+  const inner = p.thumb ? `<img src="${esc(p.thumb)}" alt="" loading="lazy">`
+    : `<span class="ph">${esc(p.owner[0].toUpperCase())}</span>`;
+  const slides = p.kind === "carousel" && p.slides ? `<span class="slides">${p.slides}</span>` : "";
+  return `<div class="thumb ${p.kind} ${cls}">${inner}${slides}</div>`;
+}
+
+function statsLine(p) {
+  const parts = p.kind === "reel"
+    ? [["views", fmt(p.views)], ["likes", fmt(p.likes)], ["comments", fmt(p.comments)], ...(p.duration ? [["sec", p.duration]] : [])]
+    : [["likes", fmt(p.likes)], ["comments", fmt(p.comments)], ...(p.slides ? [["slides", p.slides]] : [])];
+  return parts.map(([k, v]) => `<span><b>${v}</b> ${k}</span>`).join("");
+}
+
+function scoreCell(p) {
+  if (p.score == null) return `<div class="score"><span class="na">Building baseline for this page</span></div>`;
+  const old = (now - new Date(p.posted)) / 36e5 > 2160;
+  const vs = p.basis === "day_one" ? `day-one usual ${fmt(p.baseline)} ${p.metric}` : `usual${old ? " then" : ""} ${fmt(p.baseline)} ${p.metric}`;
+  const climbing = p.young && p.basis !== "day_one" ? `<div class="vs">still climbing</div>` : "";
+  return `<div class="score ${p.score >= 2 ? "hot" : ""}"><div class="x">${p.score.toFixed(1)}×</div>
+    <div class="vs">${vs}</div>${climbing}</div>`;
+}
+
+function render() {
+  const own = new Set(DATA.own);
+  const win = curWin();
+  const winPhrase = win[4];
+
+
+  const count = (k) => DATA.posts.filter((p) => matches(p, k)).length;
+  seg($("kind"), [["reel", "Reels"], ["carousel", "Carousels"], ["image", "Single images"]], state.kind, (v) => {
+    state.kind = v; state.limit = 25;
+    if (!sortOptions().some(([k]) => k === state.sort)) state.sort = "score";
+    render();
+  }, (v, l) => `${l}<span class="count">${count(v)}</span>`);
+  seg($("win"), WINDOWS().map(([k, l]) => [k, l]), state.win, (v) => { state.win = v; state.limit = 25; render(); });
+  seg($("group"), [["All", "All pillars"], ...DATA.groups.map((g) => [g, g])], state.group, (v) => { state.group = v; state.limit = 25; render(); });
+  const notes = DATA.group_notes || {};
+  const vaultNote = isVault() ? `<div class="vault-note">These posts have finished their run and are out of the algorithm's push. Each is scored against what that page was getting at the time, so these are proven formats that are safe to remake.</div>` : "";
+  $("pnote").innerHTML = vaultNote + (state.group !== "All" && notes[state.group]
+    ? `<p class="pillar-note"><b>${esc(state.group)}</b> → ${esc(notes[state.group])}</p>`
+    : state.group === "All" && Object.keys(notes).length
+      ? `<p class="pillar-note">${Object.entries(notes).map(([g, n]) => `<b>${esc(g)}</b> → ${esc(n)}`).join(" &nbsp;·&nbsp; ")}</p>` : "");
+  $("sort").innerHTML = sortOptions().map(([v, l]) => `<option value="${v}" ${v === state.sort ? "selected" : ""}>${l}</option>`).join("");
+
+  const list = DATA.posts.filter((p) => matches(p));
+  const noun = state.kind === "reel" ? "reel" : state.kind === "image" ? "image post" : "carousel";
+
+  // hero: biggest outlier in the current view
+  const top = [...list].filter((p) => p.score != null && !own.has(p.owner)).sort((a, b) => b.score - a.score)[0];
+  $("hero").innerHTML = top && top.score >= 1.5 ? `
+    <a class="hero" href="${esc(top.url)}" target="_blank" rel="noopener">
+      <div class="mult">${top.score.toFixed(1)}<small>×</small></div>
+      <div>
+        <p class="what">Biggest outlier ${winPhrase}</p>
+        <p class="why">@${esc(top.owner)}'s ${noun} is pulling ${top.score.toFixed(1)} times ${top.basis === "day_one" ? "what that page usually gets on day one" : "its usual " + top.metric}, posted ${ageOf(top.posted)}.</p>
+        <p class="cap">${esc(top.caption) || "No caption"}</p>
+      </div>
+      ${thumb(top)}
+    </a>` : "";
+
+  const rows = sorted(list);
+  if (!rows.length) {
+    const wide = isVault() ? "m3p" : "d90";
+    $("board").innerHTML = `<li class="empty">No ${noun}s from ${state.group === "All" ? "these pages" : state.group + " pages"} ${winPhrase}.
+      ${state.win !== wide ? `<br><button type="button" id="widen">Show ${isVault() ? "all 3+ months" : "the last 90 days"}</button>` : ""}</li>`;
+    const w = $("widen"); if (w) w.onclick = () => { state.win = wide; render(); };
+  } else {
+    $("board").innerHTML = rows.slice(0, state.limit).map((p, i) => `
+      <li class="row"><a href="${esc(p.url)}" target="_blank" rel="noopener">
+        <span class="rank">${i + 1}</span>
+        ${thumb(p)}
+        <div>
+          <div class="meta"><span class="handle">@${esc(p.owner)}</span>${own.has(p.owner) ? `<span class="tag">Your page</span>` : ""}<span>${esc(p.group)}</span><span>${ageOf(p.posted)}</span></div>
+          <p class="cap">${esc(p.caption) || "No caption"}</p>
+          <div class="stats">${statsLine(p)}</div>
+        </div>
+        ${scoreCell(p)}
+      </a></li>`).join("") +
+      (rows.length > state.limit ? `<li><button type="button" class="more" id="more">Show all ${rows.length} ${noun}s</button></li>` : "");
+    const m = $("more"); if (m) m.onclick = () => { state.limit = Infinity; render(); };
+  }
+}
+
+function init() {
+  $("title").textContent = DATA.title;
+  document.title = DATA.title;
+  $("updated").textContent = "Updated " + now.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  if (DATA.sample) $("sample").innerHTML = `<div class="sample-note">Preview with made-up numbers. Real posts appear after the first scheduled run.</div>`;
+  $("sort").onchange = (e) => { state.sort = e.target.value; render(); };
+  $("foot").innerHTML = `
+    <p>Tracking ${DATA.pages_tracked} pages. The multiplier compares each post with that page's typical post of the same type: views for reels, likes for carousels and single images. Each post is compared with what that page was getting around the same time, so older posts aren't judged against today's numbers. Posts under three days old are compared with how the page's other posts looked on day one. The Vault keeps up to ${Math.round(DATA.archive_days / 30)} months of posts and grows every week.</p>
+    ${DATA.silent_pages.length ? `<p>No posts in the last 7 days from ${DATA.silent_pages.map((h) => "@" + esc(h)).join(", ")}. If that looks wrong, check the handle spelling in config.json.</p>` : ""}`;
+  render();
+}
+init();
+</script>
+</body>
+</html>
