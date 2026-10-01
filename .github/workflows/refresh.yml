@@ -1,0 +1,61 @@
+name: Refresh dashboard
+
+on:
+  schedule:
+    - cron: "0 10 * * 0"   # Sundays, 10:00 UTC = 6:00 a.m. Eastern (5:00 a.m. in winter)
+  workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: "First run: pull the 12-month archive so every page gets a baseline"
+        type: boolean
+        default: false
+      apify_run_id:
+        description: "Optional: rebuild from a finished Apify run ID (no new scrape)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency: refresh-dashboard
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Scrape Instagram and rebuild the dashboard
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        run: python scripts/build.py ${{ inputs.bootstrap && '--bootstrap' || '' }} --from-run "${{ inputs.apify_run_id }}"
+
+      - name: Save post history
+        run: |
+          git config user.name "dashboard-bot"
+          git config user.email "dashboard-bot@users.noreply.github.com"
+          mkdir -p data
+          git add data docs
+          git diff --cached --quiet || git commit -m "Weekly refresh $(date -u +%F)"
+          git push
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: refresh
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/deploy-pages@v4
