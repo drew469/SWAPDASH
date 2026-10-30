@@ -59,12 +59,7 @@
   .seg .count { opacity: .6; font-weight: 500; margin-left: 4px; }
   .sort { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; margin-left: auto; }
   .sort select { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 8px; color: var(--ink); }
-  #win button[data-v="m3_6"] { margin-left: 6px; position: relative; }
-  #win button[data-v="m3_6"]::before { content: ""; position: absolute; left: -4px; top: 6px; bottom: 6px; border-left: 1px solid var(--rule); }
-  #win { flex-wrap: wrap; }
-  .pillar-note { margin: -8px 0 16px; font-size: 14px; color: var(--muted); }
-  .pillar-note b { color: var(--ink); }
-  .vault-note { background: var(--accent-soft); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin: -6px 0 16px; }
+  .tab-note { margin: -8px 0 16px; font-size: 14px; color: var(--muted); }
 
   /* hero: the one loud thing */
   .hero {
@@ -140,13 +135,12 @@
   <div class="controls" role="toolbar" aria-label="Filters">
     <div class="seg kind" id="kind"></div>
     <div class="seg" id="win"></div>
-    <div class="seg" id="group"></div>
     <label class="sort">Rank by
       <select id="sort"></select>
     </label>
   </div>
 
-  <div id="pnote"></div>
+  <div id="tnote"></div>
   <div id="hero"></div>
   <ol class="board" id="board" aria-live="polite"></ol>
 
@@ -156,17 +150,11 @@
 <script>
 const DATA = /*__DATA__*/null;
 
-const state = { kind: "reel", win: "h72", group: "All", sort: "score", limit: 25 };
+const state = { tab: "static", win: "d7", sort: "score", limit: 25 };
 // [key, button label, from hours ago, to hours ago, phrase used in sentences]
 const RECENT = [["h24", "24 hours", 0, 24, "in the last 24 hours"], ["h72", "72 hours", 0, 72, "in the last 72 hours"],
-  ["d7", "7 days", 0, 168, "in the last 7 days"], ["d30", "30 days", 0, 720, "in the last 30 days"],
-  ["d90", "90 days", 0, 2160, "in the last 90 days"]];
-const VAULT = [["m3_6", "3–6 months ago", 2160, 4380, "from 3–6 months ago"],
-  ["m6_12", "6–12 months ago", 4380, 8800, "from 6–12 months ago"],
-  ["m3p", "All 3+ months", 2160, 8800, "from 3+ months ago"]];
-const WINDOWS = () => [...RECENT, ...VAULT];
-const isVault = () => VAULT.some(([k]) => k === state.win);
-const curWin = () => WINDOWS().find(([k]) => k === state.win) || WINDOWS()[0];
+  ["d7", "7 days", 0, 168, "in the last 7 days"]];
+const curWin = () => RECENT.find(([k]) => k === state.win) || RECENT[0];
 const now = new Date(DATA.generated);
 const $ = (id) => document.getElementById(id);
 
@@ -184,13 +172,15 @@ function inWindow(p) {
   const h = (now - new Date(p.posted)) / 36e5;
   return h >= from && h <= to;
 }
-function matches(p, kind = state.kind) {
-  return p.kind === kind && inWindow(p) && (state.group === "All" || p.group === state.group);
+// AI Reels tab = reels only. Carousels & images tab = everything else. The build already
+// guarantees reels only come from the AI reel pages and carousels/images only from the others.
+function matches(p, tab = state.tab) {
+  return (tab === "ai" ? p.kind === "reel" : p.kind !== "reel") && inWindow(p);
 }
 
 function sortOptions() {
-  const main = state.kind === "reel" ? ["views", "Most views"] : ["likes", "Most likes"];
-  return [["score", "Beat their normal"], main, ...(state.kind === "reel" ? [["likes", "Most likes"]] : []),
+  const main = state.tab === "ai" ? ["views", "Most views"] : ["likes", "Most likes"];
+  return [["score", "Beat their normal"], main, ...(state.tab === "ai" ? [["likes", "Most likes"]] : []),
     ["comments", "Most comments"], ["posted", "Newest"]];
 }
 
@@ -226,8 +216,7 @@ function statsLine(p) {
 
 function scoreCell(p) {
   if (p.score == null) return `<div class="score"><span class="na">Building baseline for this page</span></div>`;
-  const old = (now - new Date(p.posted)) / 36e5 > 2160;
-  const vs = p.basis === "day_one" ? `day-one usual ${fmt(p.baseline)} ${p.metric}` : `usual${old ? " then" : ""} ${fmt(p.baseline)} ${p.metric}`;
+  const vs = p.basis === "day_one" ? `day-one usual ${fmt(p.baseline)} ${p.metric}` : `usual ${fmt(p.baseline)} ${p.metric}`;
   const climbing = p.young && p.basis !== "day_one" ? `<div class="vs">still climbing</div>` : "";
   return `<div class="score ${p.score >= 2 ? "hot" : ""}"><div class="x">${p.score.toFixed(1)}×</div>
     <div class="vs">${vs}</div>${climbing}</div>`;
@@ -240,23 +229,19 @@ function render() {
 
 
   const count = (k) => DATA.posts.filter((p) => matches(p, k)).length;
-  seg($("kind"), [["reel", "Reels"], ["carousel", "Carousels"], ["image", "Single images"]], state.kind, (v) => {
-    state.kind = v; state.limit = 25;
+  seg($("kind"), [["static", "Carousels & images"], ["ai", "AI Reels"]], state.tab, (v) => {
+    state.tab = v; state.limit = 25;
     if (!sortOptions().some(([k]) => k === state.sort)) state.sort = "score";
     render();
   }, (v, l) => `${l}<span class="count">${count(v)}</span>`);
-  seg($("win"), WINDOWS().map(([k, l]) => [k, l]), state.win, (v) => { state.win = v; state.limit = 25; render(); });
-  seg($("group"), [["All", "All pillars"], ...DATA.groups.map((g) => [g, g])], state.group, (v) => { state.group = v; state.limit = 25; render(); });
-  const notes = DATA.group_notes || {};
-  const vaultNote = isVault() ? `<div class="vault-note">These posts have finished their run and are out of the algorithm's push. Each is scored against what that page was getting at the time, so these are proven formats that are safe to remake.</div>` : "";
-  $("pnote").innerHTML = vaultNote + (state.group !== "All" && notes[state.group]
-    ? `<p class="pillar-note"><b>${esc(state.group)}</b> → ${esc(notes[state.group])}</p>`
-    : state.group === "All" && Object.keys(notes).length
-      ? `<p class="pillar-note">${Object.entries(notes).map(([g, n]) => `<b>${esc(g)}</b> → ${esc(n)}`).join(" &nbsp;·&nbsp; ")}</p>` : "");
+  seg($("win"), RECENT.map(([k, l]) => [k, l]), state.win, (v) => { state.win = v; state.limit = 25; render(); });
+  $("tnote").innerHTML = `<p class="tab-note">${state.tab === "ai"
+    ? `Reels from ${DATA.ai_reel_pages.length} AI reel pages: ${DATA.ai_reel_pages.map((h) => "@" + esc(h)).join(", ")}.`
+    : `Carousels and single images from ${DATA.carousel_pages.length} pages.`}</p>`;
   $("sort").innerHTML = sortOptions().map(([v, l]) => `<option value="${v}" ${v === state.sort ? "selected" : ""}>${l}</option>`).join("");
 
   const list = DATA.posts.filter((p) => matches(p));
-  const noun = state.kind === "reel" ? "reel" : state.kind === "image" ? "image post" : "carousel";
+  const noun = state.tab === "ai" ? "reel" : "post";
 
   // hero: biggest outlier in the current view
   const top = [...list].filter((p) => p.score != null && !own.has(p.owner)).sort((a, b) => b.score - a.score)[0];
@@ -273,9 +258,9 @@ function render() {
 
   const rows = sorted(list);
   if (!rows.length) {
-    const wide = isVault() ? "m3p" : "d90";
-    $("board").innerHTML = `<li class="empty">No ${noun}s from ${state.group === "All" ? "these pages" : state.group + " pages"} ${winPhrase}.
-      ${state.win !== wide ? `<br><button type="button" id="widen">Show ${isVault() ? "all 3+ months" : "the last 90 days"}</button>` : ""}</li>`;
+    const wide = "d7";
+    $("board").innerHTML = `<li class="empty">No ${noun}s ${winPhrase}.
+      ${state.win !== wide ? `<br><button type="button" id="widen">Show the last 7 days</button>` : ""}</li>`;
     const w = $("widen"); if (w) w.onclick = () => { state.win = wide; render(); };
   } else {
     $("board").innerHTML = rows.slice(0, state.limit).map((p, i) => `
@@ -283,7 +268,7 @@ function render() {
         <span class="rank">${i + 1}</span>
         ${thumb(p)}
         <div>
-          <div class="meta"><span class="handle">@${esc(p.owner)}</span>${own.has(p.owner) ? `<span class="tag">Your page</span>` : ""}<span>${esc(p.group)}</span><span>${ageOf(p.posted)}</span></div>
+          <div class="meta"><span class="handle">@${esc(p.owner)}</span>${own.has(p.owner) ? `<span class="tag">Your page</span>` : ""}<span>${p.kind === "carousel" ? "Carousel" : p.kind === "image" ? "Single image" : "Reel"}</span><span>${ageOf(p.posted)}</span></div>
           <p class="cap">${esc(p.caption) || "No caption"}</p>
           <div class="stats">${statsLine(p)}</div>
         </div>
@@ -301,7 +286,7 @@ function init() {
   if (DATA.sample) $("sample").innerHTML = `<div class="sample-note">Preview with made-up numbers. Real posts appear after the first scheduled run.</div>`;
   $("sort").onchange = (e) => { state.sort = e.target.value; render(); };
   $("foot").innerHTML = `
-    <p>Tracking ${DATA.pages_tracked} pages. The multiplier compares each post with that page's typical post of the same type: views for reels, likes for carousels and single images. Each post is compared with what that page was getting around the same time, so older posts aren't judged against today's numbers. Posts under three days old are compared with how the page's other posts looked on day one. The Vault keeps up to ${Math.round(DATA.archive_days / 30)} months of posts and grows every week.</p>
+    <p>Tracking ${DATA.pages_tracked} pages. The multiplier compares each post with that page's typical post of the same type: views for reels, likes for carousels and single images. Posts under three days old are compared with how the page's other posts looked on day one.</p>
     ${DATA.silent_pages.length ? `<p>No posts in the last 7 days from ${DATA.silent_pages.map((h) => "@" + esc(h)).join(", ")}. If that looks wrong, check the handle spelling in config.json.</p>` : ""}`;
   render();
 }
