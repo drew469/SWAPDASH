@@ -43,12 +43,23 @@ def parse_ts(value):
     return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+CAROUSEL_TAB = "Carousels & images"
+AI_TAB = "AI Reels"
+
+
 def all_handles():
-    return [h.lower() for handles in CONFIG["groups"].values() for h in handles]
+    return [h.lower() for h in CONFIG["carousel_pages"] + CONFIG["ai_reel_pages"]]
 
 
 def group_lookup():
-    return {h.lower(): g for g, handles in CONFIG["groups"].items() for h in handles}
+    """handle -> tab. Carousel pages only ever contribute carousels/images; AI reel pages only reels."""
+    out = {h.lower(): CAROUSEL_TAB for h in CONFIG["carousel_pages"]}
+    out.update({h.lower(): AI_TAB for h in CONFIG["ai_reel_pages"]})
+    return out
+
+
+def kind_allowed(kind, tab):
+    return kind == "reel" if tab == AI_TAB else kind in ("carousel", "image")
 
 
 # ---------------------------------------------------------------- Apify
@@ -132,7 +143,7 @@ def normalise(item, lookup):
     if kind == "image" and not CONFIG["scoring"]["include_single_images"]:
         return None
     owner = owner_of(item, lookup)
-    if owner not in lookup:
+    if owner not in lookup or not kind_allowed(kind, lookup[owner]):
         return None
 
     likes = item.get("likesCount")
@@ -173,9 +184,22 @@ def merge(history, fresh):
         if 12 <= age_h <= EARLY_MAX_HOURS:
             merged["early"] = metric(merged)[1]  # how it looked on day one
         history["posts"][post["code"]] = merged
-    keep_days = max(CONFIG["scoring"]["baseline_days"], CONFIG["scoring"].get("archive_days", 0)) + 2
+    keep_days = max(CONFIG["scoring"]["baseline_days"], CONFIG["scoring"].get("history_days", 0),
+                    CONFIG["scoring"].get("archive_days", 0)) + 2
     cutoff = NOW - dt.timedelta(days=keep_days)
     history["posts"] = {c: p for c, p in history["posts"].items() if parse_ts(p["posted"]) >= cutoff}
+    return filter_history(history)
+
+
+def filter_history(history):
+    """Drop anything from pages we no longer track, and any post type that page isn't tracked for."""
+    lookup = group_lookup()
+    kept = {}
+    for c, p in history["posts"].items():
+        tab = lookup.get(p["owner"])
+        if tab and kind_allowed(p["kind"], tab):
+            kept[c] = {**p, "group": tab}
+    history["posts"] = kept
     return history
 
 
@@ -379,8 +403,8 @@ def render(posts, run_info):
         "title": CONFIG["dashboard_title"],
         "generated": NOW.isoformat(),
         "sample": run_info.get("sample", False),
-        "groups": list(CONFIG["groups"].keys()),
-        "group_notes": CONFIG.get("group_notes", {}),
+        "carousel_pages": [h.lower() for h in CONFIG["carousel_pages"]],
+        "ai_reel_pages": [h.lower() for h in CONFIG["ai_reel_pages"]],
         "archive_days": CONFIG["scoring"].get("archive_days", 7),
         "own": [h.lower() for h in CONFIG.get("own_handles", [])],
         "pages_tracked": len(all_handles()),
@@ -399,6 +423,8 @@ def main():
     ap.add_argument("--bootstrap", action="store_true", help="first run: pull the full archive and build baselines")
     ap.add_argument("--sample", action="store_true", help="use fake data, no API calls")
     ap.add_argument("--from-run", default="", help="rebuild from a finished Apify run ID instead of scraping")
+    ap.add_argument("--from-file", default="", help="rebuild from a saved JSON list of scraped items (no API call)")
+    ap.add_argument("--no-thumbs", action="store_true", help="skip downloading new thumbnails (preview builds)")
     args = ap.parse_args()
 
     lookup = group_lookup()
@@ -414,7 +440,11 @@ def main():
     cfg = CONFIG["apify"]
     first = args.bootstrap or not HISTORY_PATH.exists()
     days = cfg["bootstrap_lookback_days"] if first else cfg["daily_lookback_days"]
-    if args.from_run.strip():
+    if args.from_file.strip():
+        loaded = json.loads(pathlib.Path(args.from_file.strip()).read_text())
+        raw = loaded["items"] if isinstance(loaded, dict) else loaded
+        log(f"Loaded {len(raw)} scraped items from file, no API call")
+    elif args.from_run.strip():
         raw = fetch_existing_run(args.from_run.strip())
     else:
         max_posts = cfg["bootstrap_max_posts_per_page"] if first else cfg["daily_max_posts_per_page"]
@@ -425,7 +455,7 @@ def main():
     if silent:
         log(f"No posts came back for: {', '.join(silent)}")
 
-    history = merge(load_history(), fresh)
+    history = merge(filter_history(load_history()), fresh)
     history["runs"] = (history.get("runs", []) + [{
         "at": NOW.isoformat(), "lookback_days": days, "raw_items": len(raw), "kept": len(fresh),
     }])[-60:]
@@ -433,7 +463,13 @@ def main():
     HISTORY_PATH.write_text(json.dumps(history, indent=1))
 
     scored = score_posts(history)
-    cache_thumbnails(scored)
+    if args.no_thumbs:
+        for p in scored:
+            t = THUMBS / f"{p['code']}.jpg"
+            p["thumb"] = f"thumbs/{t.name}" if t.exists() else None
+            p.pop("image", None)
+    else:
+        cache_thumbnails(scored)
     render(scored, {"silent_pages": silent})
 
 
